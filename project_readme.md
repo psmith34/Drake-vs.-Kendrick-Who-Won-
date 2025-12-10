@@ -1,0 +1,760 @@
+# Drake vs. Kendrick: Who Won?
+
+
+### Background
+
+Drake and Kendrick Lamar’s famous feud is the product of years of
+competitive tension between two artists who sit at the top of the rap
+industry. Their rivalry has always centered on questions of artistic
+credibility, authenticity, and cultural influence. What began as subtle
+lyrical jabs eventually escalated into a full-scale back-and-forth,
+fueled by accusations about fatherhood, identity, industry manipulation,
+and what it really means to be a “real” rapper. The conflict dominated
+the hip-hop world in 2024, with each release sparking massive social
+media debate, streaming spikes, and beefing fandoms. At its core, the
+feud reflects a battle not just over music, but over legacy and
+reputation—making it one of the most intense and culturally impactful
+rap clashes in recent years.
+
+### Objective
+
+The goal of this project is to use analytics to evaluate one of the most
+high-profile rap feuds in recent history and determine which artist
+ultimately “won” the battle based on measurable evidence. Using Spotify
+metadata, Lyric Genius data, and sentiment-driven metrics, I analyzed
+each diss track’s emotional tone, lyrical severity, and reception with
+listeners. By measuring the correlation between sentiment and
+popularity, this project quantifies how negative and aggressive writing
+affected engagement. Ultimately, the objective is to understand whether
+harsher lyrics translated into higher popularity, whether sentiment
+shaped audience response, and which artist’s releases demonstrated
+stronger performance across these data-based indicators.
+
+### Code
+
+## Spotify
+
+# Spotify API
+
+To access information about each of the diss tracks, I’m using a Spotify
+API. This required creating an account and generating an access code,
+which will live in my environment (to keep it safe & secret). We’ll need
+to import the Spotify package (spotipy) and pull in that access key.
+
+``` python
+from dotenv import load_dotenv
+import os
+import pandas as pd 
+from spotipy import Spotify
+from spotipy.oauth2 import SpotifyClientCredentials
+
+load_dotenv(dotenv_path="/Users/paigesmith/Downloads/Unstructured/Final/.env")
+
+client_id = os.getenv("SPOTIFY_CLIENT_ID")
+client_secret = os.getenv("SPOTIFY_CLIENT_SECRET")
+
+sp = Spotify(client_credentials_manager=SpotifyClientCredentials(
+    client_id=client_id,
+    client_secret=client_secret
+))
+
+print("Spotify authentication successful!")
+```
+
+    Spotify authentication successful!
+
+# Diss Track List
+
+I determined the 10 tracks (5 per artist) that were the main events of
+this rab battle and stored them in a dictionary for later use.
+
+``` python
+tracks = [
+    {"artist": "Drake", "track": "First Person Shooter"},
+    {"artist": "Kendrick Lamar", "track": "Like That"},
+    {"artist": "Drake", "track": "Push Ups"},
+    {"artist": "Drake", "track": "Taylor Made Freestyle"},
+    {"artist": "Kendrick Lamar", "track": "Euphoria"},
+    {"artist": "Kendrick Lamar", "track": "6:16 in LA"},
+    {"artist": "Drake", "track": "Family Matters"},
+    {"artist": "Kendrick Lamar", "track": "Meet the Grahams"},
+    {"artist": "Kendrick Lamar", "track": "Not Like Us"},
+    {"artist": "Drake", "track": "The Heart Part 6"}
+]
+
+print(tracks)
+```
+
+    [{'artist': 'Drake', 'track': 'First Person Shooter'}, {'artist': 'Kendrick Lamar', 'track': 'Like That'}, {'artist': 'Drake', 'track': 'Push Ups'}, {'artist': 'Drake', 'track': 'Taylor Made Freestyle'}, {'artist': 'Kendrick Lamar', 'track': 'Euphoria'}, {'artist': 'Kendrick Lamar', 'track': '6:16 in LA'}, {'artist': 'Drake', 'track': 'Family Matters'}, {'artist': 'Kendrick Lamar', 'track': 'Meet the Grahams'}, {'artist': 'Kendrick Lamar', 'track': 'Not Like Us'}, {'artist': 'Drake', 'track': 'The Heart Part 6'}]
+
+# Manual Data Entry (Filling in the Gaps)
+
+Of the 10 diss tracks, 3 of them were either never released on Spotify,
+or have since been removed. I’ll manually fill in those release dates
+that won’t be accessible through the spotipy package, and provide some
+context as to why there is no Spotify URL.
+
+``` python
+MANUAL_RELEASE_DATES = {
+    "Taylor Made Freestyle": "2024-04-19", 
+    "6:16 in LA": "2024-05-03",
+    "The Heart Part 6": "2024-05-05"
+}
+
+MANUAL_NOT_ON_SPOTIFY = {
+    "Taylor Made Freestyle": "Instagram exclusive - now removed",
+    "6:16 in LA": "Instagram exclusive",
+    "The Heart Part 6": "Instagram exclusive - now removed"
+}
+```
+
+# Pulling the Spotify Info
+
+I wrote a funtion to loop through my list of tracks, find them in
+Spotify, and pull the name, artist, album, release date, popularity
+score and URL for each song. The lift of information is then converted
+to a dataframe. One manual update that needed to be made to this
+information was changing the artist name for the song “Like That”. This
+is because while it is technically a Future song, the diss features
+Kendrick who takes verbal shots at Drake in his verse, therefore earning
+its spot in the list of 10 back-and-forth diss tracks. To make for
+moother analysis in later steps where I’ll compare sentiment and
+popularity scores grouped by Drake vs. Kendrick, I need this song to be
+classified as a Kendrick track.
+
+Note it is unclear to the public how Spotify determines the “Popularity
+Score” of songs, however, it can be inferred that the number is
+calculated by the total number of plays a track has and how recent they
+are
+
+``` python
+def get_track_info(track_name, artist_name):
+    result = sp.search(q=f"track:{track_name} artist:{artist_name}", type="track", limit=1)
+    items = result['tracks']['items']
+    if items:
+        track = items[0]
+        return {
+            "Track": track['name'],
+            "Artist": track['artists'][0]['name'],
+            "Album": track['album']['name'],
+            "Release_Date": track['album']['release_date'],
+            "Popularity": track['popularity'],
+            "Spotify_URL": track['external_urls']['spotify']
+        }
+    else:
+        return {
+            "Track": track_name,
+            "Artist": artist_name,
+            "Album": None,
+            "Release_Date": MANUAL_RELEASE_DATES.get(track_name),
+            "Popularity": None,
+            "Spotify_URL": MANUAL_NOT_ON_SPOTIFY.get(track_name)
+        }
+```
+
+``` python
+data = [get_track_info(t['track'], t['artist']) for t in tracks]
+```
+
+``` python
+df = pd.DataFrame(data)
+df.loc[df["Track"] == "Like That", "Artist"] = "Kendrick Lamar"
+df
+```
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+&#10;    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+&#10;    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+
+|  | Track | Artist | Album | Release_Date | Popularity | Spotify_URL |
+|----|----|----|----|----|----|----|
+| 0 | First Person Shooter (feat. J. Cole) | Drake | For All The Dogs | 2023-10-06 | 74.0 | https://open.spotify.com/track/7aqfrAY2p9BUSiu... |
+| 1 | Like That | Kendrick Lamar | WE DON'T TRUST YOU | 2024-03-22 | 83.0 | https://open.spotify.com/track/2tudvzsrR56uom6... |
+| 2 | Push Ups | Drake | Push Ups | 2024-04-19 | 71.0 | https://open.spotify.com/track/3eh51r6rFWAlGQR... |
+| 3 | Taylor Made Freestyle | Drake | None | 2024-04-19 | NaN | Instagram exclusive - now removed |
+| 4 | euphoria | Kendrick Lamar | euphoria | 2024-04-30 | 76.0 | https://open.spotify.com/track/77DRzu7ERs0TX3r... |
+| 5 | 6:16 in LA | Kendrick Lamar | None | 2024-05-03 | NaN | Instagram exclusive |
+| 6 | Family Matters | Drake | Family Matters | 2024-05-03 | 71.0 | https://open.spotify.com/track/1wFFFzJ5EsKbBWZ... |
+| 7 | meet the grahams | Kendrick Lamar | meet the grahams | 2024-05-03 | 70.0 | https://open.spotify.com/track/4S8PxReB1UiDR2F... |
+| 8 | Not Like Us | Kendrick Lamar | Not Like Us | 2024-05-04 | 88.0 | https://open.spotify.com/track/6AI3ezQ4o3HUoP6... |
+| 9 | The Heart Part 6 | Drake | None | 2024-05-05 | NaN | Instagram exclusive - now removed |
+
+</div>
+
+## Lyric Genius
+
+# Diss Track List (Updated)
+
+In order to complete later steps where we will need to input the track
+titles and artist names into a URL to be accessed by lyric genius, I
+needed to rewrite the list of diss tracks using a format that replaces
+the spaces between words with %20.
+
+``` python
+tracks_lg = [
+    {"artist": "Drake", "track": "First%20Person%20Shooter"},
+    {"artist": "Kendrick%20Lamar", "track": "Like%20That"},
+    {"artist": "Drake", "track": "Push%20Ups"},
+    {"artist": "Drake", "track": "Taylor%20Made%20Freestyle"},
+    {"artist": "Kendrick%20Lamar", "track": "Euphoria"},
+    {"artist": "Kendrick%20Lamar", "track": "6%2016%20in%20LA"},
+    {"artist": "Drake", "track": "Family%20Matters"},
+    {"artist": "Kendrick%20Lamar", "track": "Meet%20the%20Grahams"},
+    {"artist": "Kendrick%20Lamar", "track": "Not%20Like%20Us"},
+    {"artist": "Drake", "track": "The%20Heart%20Part%206"}
+]
+```
+
+# Pulling the Lyrics from Genius
+
+I defined a function that will use an API URL for lyric genius and
+insert of track title and artist (previously defined) to access each
+song in my list on the lyric genius website. It will then scrape the
+lyrics from the site.
+
+``` python
+from bs4 import BeautifulSoup
+import requests
+import re
+def get_lyrics(track_name, artist_name):
+    try:
+        link = f'https://api.genius.com/search?q={artist_name}%20{track_name}'
+        bearer_token = '9YL6wJAbZwbsuDx56yN9cYDEimYcowjYV-2U8W9FJpOB_9Vly5WrcKn-IrfSfnnA'
+        headers = {
+            'Authorization': f'Bearer {bearer_token}'
+            }
+        r = requests.get(link, headers=headers)
+        req_comp = r.json()
+        part_path = req_comp.get('response').get('hits')[0].get('result')['path']
+        full_link = f'https://genius.com{part_path}'
+        page = requests.get(full_link)
+        soup = BeautifulSoup(page.content, 'html.parser')
+        lyrics = soup.select('#lyrics-root')[0].get_text()
+
+        import re
+
+        lyrics = re.sub('^.*Read More.', '', lyrics)
+        return lyrics
+    except Exception as e:
+        print(f"Error fetching lyrics for {track_name}: {e}")
+        return None
+```
+
+Here I applied my fucntion to the list of tracks, convertem them to a
+dataframe, and stored it in a new column called “Lyrics” in my original
+dataframe which contains the spotify information that’s already been
+collected. I’m then saving all of this to a csv as backup for peace of
+mind.
+
+``` python
+lyrics_list = []
+
+for t in tracks_lg:
+    track = t["track"]
+    print(track)
+    artist = t["artist"]
+    print(artist)
+    lyrics = get_lyrics(track, artist)
+    lyrics_list.append(lyrics)
+
+df["lyrics"] = pd.DataFrame(lyrics_list, columns=["Lyrics"])
+```
+
+    First%20Person%20Shooter
+    Drake
+    Like%20That
+    Kendrick%20Lamar
+    Push%20Ups
+    Drake
+    Taylor%20Made%20Freestyle
+    Drake
+    Euphoria
+    Kendrick%20Lamar
+    6%2016%20in%20LA
+    Kendrick%20Lamar
+    Family%20Matters
+    Drake
+    Meet%20the%20Grahams
+    Kendrick%20Lamar
+    Not%20Like%20Us
+    Kendrick%20Lamar
+    The%20Heart%20Part%206
+    Drake
+
+``` python
+df.to_csv('drake_kendrick.csv', index=False)
+```
+
+## Cleaning
+
+I defined a function to loop through my column of lyrics and perform
+basic cleaning tasks such as:
+
+This is important for the sentiment analysis I will perform in the
+following steps to ensure that the Vader Analysis is only being ran on
+the lyrics themselves, not the … This will give a more accurate score
+that speaks only to the sentiment of the song’s content.
+
+``` python
+import re
+
+def clean_lyrics(text):
+    if not isinstance(text, str):
+        return None
+    text = re.sub(r'\[.*?\]', '', text, flags=re.DOTALL)
+    text = re.sub(r'You might also like.*', '', text)
+    text = re.sub(r'Embed$', '', text)
+    text = re.sub(r'\n{2,}', '\n', text)
+    text = re.sub(r"\d+\s+ContributorsTranslations.*?Lyrics", "", text, flags=re.DOTALL | re.IGNORECASE,)
+    text = re.sub(r'([a-z])([A-Z])', '\\1 \\2', text)
+    text = re.sub(r'.*(?=Read More)', '', text)
+    text = re.sub(r'\n', ' ', text)
+    return text.strip()
+
+df
+```
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+&#10;    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+&#10;    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+
+|  | Track | Artist | Album | Release_Date | Popularity | Spotify_URL | lyrics |
+|----|----|----|----|----|----|----|----|
+| 0 | First Person Shooter (feat. J. Cole) | Drake | For All The Dogs | 2023-10-06 | 74.0 | https://open.spotify.com/track/7aqfrAY2p9BUSiu... | 372 ContributorsTranslationsEspañolDeutschPort... |
+| 1 | Like That | Kendrick Lamar | WE DON'T TRUST YOU | 2024-03-22 | 83.0 | https://open.spotify.com/track/2tudvzsrR56uom6... | \[Intro: Future\]Gotta fire my joint up on this ... |
+| 2 | Push Ups | Drake | Push Ups | 2024-04-19 | 71.0 | https://open.spotify.com/track/3eh51r6rFWAlGQR... | 467 ContributorsTranslationsEspañolTürkçeРусск... |
+| 3 | Taylor Made Freestyle | Drake | None | 2024-04-19 | NaN | Instagram exclusive - now removed | \[Intro: 2Pac (AI)\]KilluminatiDons rise againYo... |
+| 4 | euphoria | Kendrick Lamar | euphoria | 2024-04-30 | 76.0 | https://open.spotify.com/track/77DRzu7ERs0TX3r... | \[Part I\]\[Intro\]​eurt s'em tuoba yas yeht gniht... |
+| 5 | 6:16 in LA | Kendrick Lamar | None | 2024-05-03 | NaN | Instagram exclusive | \[Intro\]Uh (Uh)Uh (Uh)Uh, yeah (Uh)It's surviva... |
+| 6 | Family Matters | Drake | Family Matters | 2024-05-03 | 71.0 | https://open.spotify.com/track/1wFFFzJ5EsKbBWZ... | \[Part I\]\[Intro: Drake & Sandra Graham\]Maybe in... |
+| 7 | meet the grahams | Kendrick Lamar | meet the grahams | 2024-05-03 | 70.0 | https://open.spotify.com/track/4S8PxReB1UiDR2F... | \[Verse 1\]Dear AdonisI'm sorry that that man is... |
+| 8 | Not Like Us | Kendrick Lamar | Not Like Us | 2024-05-04 | 88.0 | https://open.spotify.com/track/6AI3ezQ4o3HUoP6... | \[Intro\]Psst, I see dead people(Mustard on the ... |
+| 9 | The Heart Part 6 | Drake | None | 2024-05-05 | NaN | Instagram exclusive - now removed | \[Intro: Drake & Aretha Franklin\]Now let me see... |
+
+</div>
+
+Applying this fucntion to the column of messy lyrics, and storing the
+output in a new column called “Clean_Lyrics” + Additional cleaning for
+particular, stubborn instances
+
+``` python
+df["Clean_Lyrics"] = df["lyrics"].apply(clean_lyrics)
+df["Clean_Lyrics"] = df["Clean_Lyrics"].str.replace('.*(?=Read More)', '', regex=True)
+df["Clean_Lyrics"] = df["Clean_Lyrics"].str.replace('.*EEuphoria', '', regex=True)
+df["Clean_Lyrics"] = df["Clean_Lyrics"].str.replace('See Kendrick Lamar.*$', '', regex=True)
+
+df
+```
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+&#10;    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+&#10;    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+
+|  | Track | Artist | Album | Release_Date | Popularity | Spotify_URL | lyrics | Clean_Lyrics |
+|----|----|----|----|----|----|----|----|----|
+| 0 | First Person Shooter (feat. J. Cole) | Drake | For All The Dogs | 2023-10-06 | 74.0 | https://open.spotify.com/track/7aqfrAY2p9BUSiu... | 372 ContributorsTranslationsEspañolDeutschPort... | Read More (Pew, pew-pew)First-person shooter m... |
+| 1 | Like That | Kendrick Lamar | WE DON'T TRUST YOU | 2024-03-22 | 83.0 | https://open.spotify.com/track/2tudvzsrR56uom6... | \[Intro: Future\]Gotta fire my joint up on this ... | Gotta fire my joint up on this bitch Young Met... |
+| 2 | Push Ups | Drake | Push Ups | 2024-04-19 | 71.0 | https://open.spotify.com/track/3eh51r6rFWAlGQR... | 467 ContributorsTranslationsEspañolTürkçeРусск... | Read More (Whoo Kid)Ayy I could never be nobod... |
+| 3 | Taylor Made Freestyle | Drake | None | 2024-04-19 | NaN | Instagram exclusive - now removed | \[Intro: 2Pac (AI)\]KilluminatiDons rise againYo... | Killuminati Dons rise again You can see it in ... |
+| 4 | euphoria | Kendrick Lamar | euphoria | 2024-04-30 | 76.0 | https://open.spotify.com/track/77DRzu7ERs0TX3r... | \[Part I\]\[Intro\]​eurt s'em tuoba yas yeht gniht... | Them super powers gettin' neutralized, I can ... |
+| 5 | 6:16 in LA | Kendrick Lamar | None | 2024-05-03 | NaN | Instagram exclusive | \[Intro\]Uh (Uh)Uh (Uh)Uh, yeah (Uh)It's surviva... | Uh (Uh)Uh (Uh)Uh, yeah (Uh)It's survival, surv... |
+| 6 | Family Matters | Drake | Family Matters | 2024-05-03 | 71.0 | https://open.spotify.com/track/1wFFFzJ5EsKbBWZ... | \[Part I\]\[Intro: Drake & Sandra Graham\]Maybe in... | Maybe in this song, you shouldn't start by say... |
+| 7 | meet the grahams | Kendrick Lamar | meet the grahams | 2024-05-03 | 70.0 | https://open.spotify.com/track/4S8PxReB1UiDR2F... | \[Verse 1\]Dear AdonisI'm sorry that that man is... | Dear Adonis I'm sorry that that man is your fa... |
+| 8 | Not Like Us | Kendrick Lamar | Not Like Us | 2024-05-04 | 88.0 | https://open.spotify.com/track/6AI3ezQ4o3HUoP6... | \[Intro\]Psst, I see dead people(Mustard on the ... | Psst, I see dead people(Mustard on the beat, h... |
+| 9 | The Heart Part 6 | Drake | None | 2024-05-05 | NaN | Instagram exclusive - now removed | \[Intro: Drake & Aretha Franklin\]Now let me see... | Now let me see ya prove it Just let me see ya ... |
+
+</div>
+
+## Sentiment Analysis
+
+I used sentiment analysis to quantify the emotional tone of each diss
+track and make the feud measurable rather than subjective. Diss records
+are designed to be aggressive, but artists use different rhetorical
+strategies. By generating a numeric sentiment score, I could compare how
+emotionally negative each track appears on paper, examine how that tone
+relates to popularity, and evaluate whether harsher language actually
+translates into stronger audience engagement.
+
+I chose VADER because it’s a fast, transparent, rule-based sentiment
+tool designed specifically for short, informal text—like lyrics. It
+works without needing a trained model, handles slang and emphasis well,
+and gives a consistent numeric score across all tracks.
+
+``` python
+from nltk.sentiment import SentimentIntensityAnalyzer
+import nltk
+nltk.download('vader_lexicon')
+
+vader = SentimentIntensityAnalyzer()
+
+def vader_sent(text):
+    if pd.isna(text):
+        return None
+    return vader.polarity_scores(text)["compound"]
+```
+
+``` python
+df["Sentiment"] = df["Clean_Lyrics"].apply(vader_sent)
+df
+```
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+&#10;    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+&#10;    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+
+|  | Track | Artist | Album | Release_Date | Popularity | Spotify_URL | lyrics | Clean_Lyrics | Sentiment |
+|----|----|----|----|----|----|----|----|----|----|
+| 0 | First Person Shooter (feat. J. Cole) | Drake | For All The Dogs | 2023-10-06 | 74.0 | https://open.spotify.com/track/7aqfrAY2p9BUSiu... | 372 ContributorsTranslationsEspañolDeutschPort... | Read More (Pew, pew-pew)First-person shooter m... | -0.9519 |
+| 1 | Like That | Kendrick Lamar | WE DON'T TRUST YOU | 2024-03-22 | 83.0 | https://open.spotify.com/track/2tudvzsrR56uom6... | \[Intro: Future\]Gotta fire my joint up on this ... | Gotta fire my joint up on this bitch Young Met... | -0.9976 |
+| 2 | Push Ups | Drake | Push Ups | 2024-04-19 | 71.0 | https://open.spotify.com/track/3eh51r6rFWAlGQR... | 467 ContributorsTranslationsEspañolTürkçeРусск... | Read More (Whoo Kid)Ayy I could never be nobod... | -0.8408 |
+| 3 | Taylor Made Freestyle | Drake | None | 2024-04-19 | NaN | Instagram exclusive - now removed | \[Intro: 2Pac (AI)\]KilluminatiDons rise againYo... | Killuminati Dons rise again You can see it in ... | -0.9900 |
+| 4 | euphoria | Kendrick Lamar | euphoria | 2024-04-30 | 76.0 | https://open.spotify.com/track/77DRzu7ERs0TX3r... | \[Part I\]\[Intro\]​eurt s'em tuoba yas yeht gniht... | Them super powers gettin' neutralized, I can ... | -0.2996 |
+| 5 | 6:16 in LA | Kendrick Lamar | None | 2024-05-03 | NaN | Instagram exclusive | \[Intro\]Uh (Uh)Uh (Uh)Uh, yeah (Uh)It's surviva... | Uh (Uh)Uh (Uh)Uh, yeah (Uh)It's survival, surv... | 0.9209 |
+| 6 | Family Matters | Drake | Family Matters | 2024-05-03 | 71.0 | https://open.spotify.com/track/1wFFFzJ5EsKbBWZ... | \[Part I\]\[Intro: Drake & Sandra Graham\]Maybe in... | Maybe in this song, you shouldn't start by say... | -0.4135 |
+| 7 | meet the grahams | Kendrick Lamar | meet the grahams | 2024-05-03 | 70.0 | https://open.spotify.com/track/4S8PxReB1UiDR2F... | \[Verse 1\]Dear AdonisI'm sorry that that man is... | Dear Adonis I'm sorry that that man is your fa... | 0.6864 |
+| 8 | Not Like Us | Kendrick Lamar | Not Like Us | 2024-05-04 | 88.0 | https://open.spotify.com/track/6AI3ezQ4o3HUoP6... | \[Intro\]Psst, I see dead people(Mustard on the ... | Psst, I see dead people(Mustard on the beat, h... | -0.9622 |
+| 9 | The Heart Part 6 | Drake | None | 2024-05-05 | NaN | Instagram exclusive - now removed | \[Intro: Drake & Aretha Franklin\]Now let me see... | Now let me see ya prove it Just let me see ya ... | -0.7793 |
+
+</div>
+
+## Sentiment Results
+
+I applied VADER sentiment analysis to each diss track to quantify the
+emotional tone of the lyrics on a scale from –1 (highly negative) to +1
+(highly positive). Many of the tracks score extremely negative, which
+reflects the heavy use of direct insults, threats, and emotionally
+charged language typical of diss writing. However, several tracks score
+surprisingly positive. This does not indicate that the songs are
+friendly or uplifting—rather, it highlights a known limitation of
+lexicon-based sentiment tools.
+
+VADER interprets words associated with confidence, power, success, and
+triumph as positive even when they appear within hostile or competitive
+contexts. Diss tracks often include boastful, victory-oriented language
+(“I’m up,” “you can’t touch me,” “I win”), which increases the
+positivity score despite the aggressive intent. As a result, highly
+negative scores correspond to tracks where the attacks are more explicit
+and emotionally dark, while higher scores often reflect diss tracks
+delivered through bragging, dominance, and empowered framing rather than
+overt negativity.
+
+Overall, the sentiment analysis provides insight into how each artist
+constructs their lyrical attacks: whether through direct verbal assault
+or through confident, triumphant rhetoric that VADER reads as
+emotionally positive.
+
+## Visualizations
+
+# Popularity & Sentiment by Song per Artist
+
+``` python
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+
+sns.set(style="whitegrid")
+
+pop_col = "Popularity"
+
+# Normalize Popularity Score 
+df["Popularity_Pct"] = df[pop_col] / 100
+
+def plot_artist(artist_name):
+    dfa = df[df["Artist"] == artist_name].copy()
+
+    # Reshape to long form
+    long = dfa.melt(
+        id_vars=["Track"],
+        value_vars=["Sentiment", "Popularity_Pct"],
+        var_name="Metric",
+        value_name="Value"
+    )
+
+    plt.figure(figsize=(8, 5))
+    sns.barplot(
+        data=long,
+        x="Track",
+        y="Value",
+        hue="Metric"
+    )
+    plt.title(f"{artist_name}: Sentiment vs Popularity (scaled) by Song")
+    plt.xlabel("")
+    plt.xticks(rotation=45, ha="right")
+    plt.ylabel("Value (0–1 scale)")
+    plt.tight_layout()
+    plt.show()
+
+plot_artist("Drake")
+plot_artist("Kendrick Lamar")
+```
+
+![](project_readme_files/figure-commonmark/cell-16-output-1.png)
+
+![](project_readme_files/figure-commonmark/cell-16-output-2.png)
+
+# Average Sentiment by Artist
+
+This graph shows that Drake’s lyrics overall scored much more negative
+on VADER, while Kendrick’s appeared less negative.
+
+``` python
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+artist_sentiment = df.groupby("Artist")["Sentiment"].mean().reset_index()
+
+plt.figure(figsize=(6,5))
+sns.barplot(
+    data=artist_sentiment,
+    x="Artist",
+    y="Sentiment",
+    palette={"Drake": "royalblue", "Kendrick Lamar": "crimson"}
+)
+plt.title("Average Sentiment by Artist")
+plt.ylabel("Average Sentiment")
+plt.xlabel("")
+plt.show()
+```
+
+![](project_readme_files/figure-commonmark/cell-17-output-1.png)
+
+# Average Popularity Score by Artist
+
+This graph shows that Kendrick’s diss tracks were, on average, more
+popular on Spotify than Drake’s, indicating stronger listener engagement
+and wider replay value.
+
+``` python
+df["Popularity"] = pd.to_numeric(df["Popularity"], errors="coerce")
+
+# Drop tracks without Spotify popularity 
+df_pop = df.dropna(subset=["Popularity"])
+
+artist_popularity = df_pop.groupby("Artist")["Popularity"].mean().reset_index()
+
+plt.figure(figsize=(6,5))
+sns.barplot(
+    data=artist_popularity,
+    x="Artist",
+    y="Popularity",
+    palette={"Drake": "royalblue", "Kendrick Lamar": "crimson"}
+)
+
+plt.title("Average Spotify Popularity by Artist")
+plt.ylabel("Average Spotify Popularity (0–100)")
+plt.xlabel("")
+plt.show()
+```
+
+![](project_readme_files/figure-commonmark/cell-18-output-1.png)
+
+# Popularity by Song
+
+This chart shows how popular each diss track was on Spotify based on its
+popularity score. Overall, Kendrick Lamar’s tracks tend to rank the
+highest, showing the strongest listener engagement. Drake’s tracks
+perform well but generally fall slightly below Kendrick’s top releases.
+At a glance, this suggests that Kendrick’s diss tracks resonated more
+widely with audiences.
+
+``` python
+df["Popularity"] = pd.to_numeric(df["Popularity"], errors="coerce")
+
+# Drop tracks without Spotify popularity 
+df_pop = df.dropna(subset=["Popularity"])
+
+plt.figure(figsize=(12,6))
+
+sns.barplot(
+    data=df_pop.sort_values("Popularity"),
+    x="Popularity",
+    y="Track",
+    hue="Artist",
+    palette={"Drake": "royalblue", "Kendrick Lamar": "crimson"}
+)
+
+plt.title("Spotify Popularity per Diss Track (Spotify Only)")
+plt.xlabel("Spotify Popularity Score (0–100)")
+plt.ylabel("Track")
+plt.show()
+```
+
+![](project_readme_files/figure-commonmark/cell-19-output-1.png)
+
+# Sentiment by Song
+
+This chart shows how emotionally positive or negative each diss track
+appears according to the VADER sentiment analyzer. Drake’s tracks
+cluster much farther on the negative side, indicating more explicitly
+aggressive and emotionally harsh language. Kendrick’s tracks, while
+still part of a diss battle, score closer to neutral or even positive,
+reflecting less direct negativity in word choice. This highlights a
+contrast in how each artist delivers their attacks—Drake through direct
+hostility, Kendrick through more layered or strategic language.
+
+``` python
+plt.figure(figsize=(12,6))
+sns.barplot(
+    data=df.sort_values("Sentiment"),
+    x="Sentiment",
+    y="Track",
+    hue="Artist",
+    palette={"Drake": "royalblue", "Kendrick Lamar": "crimson"}
+)
+
+plt.title("Sentiment Score per Diss Track (Separated by Artist)")
+plt.xlabel("Sentiment Score (-1 = Aggressive, +1 = Positive)")
+plt.ylabel("Track")
+plt.show()
+```
+
+![](project_readme_files/figure-commonmark/cell-20-output-1.png)
+
+# Sentiment vs. Popularity by song (Correlation)
+
+This chart compares each song’s sentiment score to its Spotify
+popularity. At face value, both artists show negative sentiment across
+most tracks, but Kendrick Lamar consistently achieves higher popularity
+scores regardless of sentiment level. Even when Kendrick’s sentiment is
+just as negative (or even more negative) than Drake’s, his songs still
+sit noticeably higher on the popularity scale.
+
+The key takeaway is that popularity doesn’t drop for Kendrick when
+sentiment becomes more negative, whereas Drake’s tracks with similar
+sentiment levels remain clustered in a lower popularity range. This
+pattern suggests that Kendrick’s songs resonated more strongly with
+listeners independent of their emotional tone. This is an important
+factor when determining who “won” the feud based on measurable impact.
+
+``` python
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+sns.set(style="whitegrid")
+
+# Make sure popularity is normalized
+df["Popularity_Norm"] = df["Popularity"] / 100
+
+plt.figure(figsize=(8,6))
+sns.scatterplot(
+    data=df,
+    x="Sentiment",
+    y="Popularity_Norm",
+    hue="Artist",
+    palette={"Drake": "royalblue", "Kendrick Lamar": "crimson"},
+    s=120
+)
+
+plt.title("Sentiment vs Popularity for Each Song")
+plt.xlabel("Sentiment Score (–1 to 1)")
+plt.ylabel("Popularity (0–1)")
+plt.legend(title="")
+plt.tight_layout()
+plt.show()
+```
+
+![](project_readme_files/figure-commonmark/cell-21-output-1.png)
+
+## Correlation of Popularity vs. Sentiment
+
+In the graph above, there appears to be a slight trend following the
+pattern that as sentiment increases (lyrics are less harsh), the Spotify
+popularity score decreases. To check the validity and degree of this
+assumption, we can simply assign a correlation value between the two.
+
+Note that the 3 songs not in Spotify (discussed prior) do not have
+popularity scores, and therefore, will be left out of this correlation
+metric.
+
+``` python
+df[["Sentiment", "Popularity_Pct"]].corr()
+```
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+&#10;    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+&#10;    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+
+|                | Sentiment | Popularity_Pct |
+|----------------|-----------|----------------|
+| Sentiment      | 1.0000    | -0.5553        |
+| Popularity_Pct | -0.5553   | 1.0000         |
+
+</div>
+
+## Correlation Result
+
+The correlation between sentiment and popularity across the diss-track
+dataset is –0.577, indicating a moderate to strong negative
+relationship. This means that songs with more negative sentiment tended
+to be more popular, while tracks with more neutral or positive sentiment
+generally saw lower popularity scores. In the context of a high-profile
+rap feud, this pattern makes sense because audiences are more likely to
+engage with songs that are aggressive, confrontational, or emotionally
+charged. Overall, the data suggests that negativity drives engagement
+during diss cycles, and harsher lyrical tone is associated with stronger
+public response.
+
+### Conclusion
+
+While the sentiment and popularity data show a moderate positive
+correlation, the true takeaway from this analysis lies in the
+limitations of lexicon-based sentiment models like VADER when applied to
+diss tracks. VADER interprets boastful, triumphant, and confident
+language as emotionally positive, even when that language is being used
+to assert dominance or attack an opponent. Kendrick Lamar’s diss tracks
+rely heavily on sarcasm, layered metaphor, and victory-driven rhetoric,
+which VADER often misclassifies as uplifting rather than aggressive. In
+contrast, Drake’s tracks contain more explicit insults and emotionally
+negative phrasing, resulting in consistently lower sentiment scores.
+Despite using less overtly harsh language, Kendrick’s tracks achieved
+significantly higher popularity, suggesting that confidence and
+composure resonated more strongly with listeners than direct hostility.
+Therefore, although the sentiment-popularity correlation cannot be taken
+at face value due to classification shortcomings, the combined evidence
+from lyrical style and audience response supports the conclusion that
+Kendrick Lamar ultimately won the feud.
